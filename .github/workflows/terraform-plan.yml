@@ -1,0 +1,142 @@
+name: 'Terraform Plan'
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '*.tf'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  infra_plan:
+    name: 'Terraform Plan'
+    runs-on: ubuntu-latest
+    permissions:  
+          id-token: write
+          contents: read
+          issues: write 
+          pull-requests: write
+    defaults:
+      run:
+        shell: bash
+        
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.13.3
+
+    - name: Cache Terraform Providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-terraform-${{ hashFiles('.terraform.lock.hcl') }}
+        
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{secrets.ROLE_TO_ASSUME}}
+        aws-region: ${{secrets.AWS_REGION}}
+
+    - name: Terraform Format
+      id: fmt
+      run: terraform fmt -recursive -check
+
+    - name: Terraform Init
+      id: init
+      run: terraform init
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      env:
+        TF_VAR_eksAdmin: ${{secrets.EKS_IAM_ADMIN_USER_ARN}}
+      continue-on-error: true
+      run: |
+       terraform plan -input=false -no-color -out=tfplan 
+       PLAN_OUTPUT=$(terraform show -no-color tfplan)
+       echo "stdout<<EOF" >> $GITHUB_OUTPUT
+       echo "${PLAN_OUTPUT}" >> $GITHUB_OUTPUT
+       echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Upload Plan Artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: ./tfplan
+
+    - name: Plan summary
+      id: reduced_plan
+      if: steps.plan.outcome == 'success'
+      env:
+        FULL_PLAN: ${{ steps.plan.outputs.stdout }}
+      run: |
+        REDUCED_PLAN=$(echo "${FULL_PLAN}" | tail -n 150)
+        REDUCED_PLAN+=$'\n\n... Summary Plan (Full version available in artifact) ...'
+        echo "reduced_plan<<EOF" >> $GITHUB_OUTPUT
+        echo "${REDUCED_PLAN}" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Add Plan Comment
+      if: steps.plan.outcome == 'success'
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-number: ${{ github.event.issue.number || github.event.pull_request.number }} 
+        body: |
+          #### Terraform Format and Style 🖌  - ${{ steps.fmt.outcome }}
+          #### Terraform Initialization ⚙️   - ${{ steps.init.outcome }}
+          #### Terraform Validation 🤖       - ${{ steps.validate.outputs.stdout }}
+          #### Terraform Plan 📖             - ${{ steps.plan.outcome }}
+
+          <details><summary>########## Show Plan ##########</summary>
+
+          ######################## terraform ########################
+          ${{ steps.reduced_plan.outputs.reduced_plan }}
+          ###########################################################
+
+          </details>
+
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+            
+        edit-mode: replace
+        comment-tag: terraform-plan-comment
+
+    - name: Post Plan Failure 
+      if: steps.plan.outcome == 'failure'
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-number: ${{ github.event.issue.number || github.event.pull_request.number }} 
+        body: |
+          #### Terraform Plan 📖 - ${{ steps.plan.outcome }}
+      
+          <details><summary>########## Show Plan Error ##########</summary>
+          
+          #################################################################
+          ${{ steps.plan.outputs.stderr }}
+          #################################################################
+          
+          </details>
+          
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+            
+        edit-mode: replace
+        comment-tag: terraform-plan-comment
+
+    - name: Fail the Job if Plan Failed
+      if: steps.plan.outcome == 'failure'
+      run: exit 1

@@ -1,0 +1,182 @@
+name: "Terraform Apply"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to [staging]'
+        required: true
+        default: 'staging'
+      plan_run_id:
+        description: 'Run ID of the successful Plan workflow to deploy'
+        required: true
+      pr_number:
+        description: 'The Pull Request number to post the Apply comment on'
+        required: true
+      tf_version:
+        description: 'Terraform version to use'
+        required: true
+        default: '1.13.3'
+
+concurrency:
+  group: terraform-apply-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    permissions:  
+          id-token: write
+          contents: read
+          actions: read
+          pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform CLI
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{github.event.inputs.tf_version}}
+
+      - name: Cache Terraform plugins/providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform/
+          key: ${{ runner.os }}-terraform-${{ hashFiles('.terraform.lock.hcl') }}
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+            role-to-assume: ${{secrets.ROLE_TO_ASSUME}}
+            aws-region: ${{secrets.AWS_REGION}}
+
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform init -input=false -no-color
+
+      - name: "Download plan artifact"
+        uses: actions/download-artifact@v4
+        id: download_plan
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{github.repository}}
+          run-id: ${{ github.event.inputs.plan_run_id }}
+          name: terraform-plan
+          path: tf-artifacts
+
+      - name: "Terraform Show Plan"
+        id: plan
+        env:
+          TF_VAR_eksAdmin: ${{secrets.EKS_IAM_ADMIN_USER_ARN}}
+        continue-on-error: true
+        run: |
+          terraform show ./tf-artifacts/tfplan > plan.txt 2>&1 || true
+          
+          PL_EXIT=0
+          if grep -qE "Error:" plan.txt; then
+            PL_EXIT=1
+
+          elif grep -qE "([1-9][0-9]*) to add|([1-9][0-9]*) to change|([1-9][0-9]*) to destroy" plan.txt; then
+            PL_EXIT=2
+
+          else
+            PL_EXIT=0
+          fi
+
+          echo "plan_exit_code=${PL_EXIT}" >> $GITHUB_OUTPUT         
+          PLAN_OUTPUT=$(cat plan.txt | tail -n 150)
+          echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$PLAN_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: No changes 
+        if: steps.plan.outputs.plan_exit_code == 0
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.pr_number }}
+          body: |
+            #### Terraform Plan 📖 - ${{ steps.plan.outcome }}
+        
+            <details><summary>########## Show Plan ##########</summary>
+
+            “Terraform: No changes to apply (plan returned no changes).”
+            
+            #################################################################
+            ${{ steps.plan.outputs.plan_output }}
+            #################################################################
+            
+            </details>
+            
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+              
+          edit-mode: replace
+          comment-tag: terraform-plan-comment
+
+      - name: Terraform Apply
+        if: ${{ steps.plan.outputs.plan_exit_code == 2 }}
+        id: apply
+        env:
+          TF_VAR_eksAdmin: ${{secrets.EKS_IAM_ADMIN_USER_ARN}}
+        run: |
+          terraform apply -input=false -no-color -auto-approve ./tf-artifacts/tfplan 2>&1 | tee apply.txt
+          APPLY_OUTPUT=$(cat apply.txt | tail -n 150)
+
+          echo "apply_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$APPLY_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload apply logs 
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-logs
+          path: apply.txt
+
+      - name: Add Apply Comment
+        if: always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.pr_number }}
+          body: |
+            # Deployment to ${{ github.event.inputs.environment }}
+
+            #### Terraform Initialization ⚙️   - ${{ steps.init.outcome }}
+
+            <details><summary>########## terraform apply logs Summary ##########</summary>
+
+            ######################## terraform ########################
+            ${{ steps.apply.outputs.apply_output}}
+            ###########################################################
+
+            </details>
+
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+              
+          edit-mode: replace
+          comment-tag: terraform-apply-comment
+
+      - name: Final status check
+        if: always()
+        run: |
+          if [ "${{ steps.plan.outputs.plan_exit_code }}" = "2" ]; then
+            if grep -q "Error:" apply.txt; then
+              echo "Deployment failed! See apply.txt artifact for details."
+              exit 1
+            elif [ "${{ steps.apply.outcome }}" != "success" ]; then
+              echo "Deployment failed! Apply step did not exit successfully."
+              exit 1
+            else
+              echo "Apply succeeded."
+            fi
+          else
+            echo "Apply skipped: No changes detected in plan (Exit Code 0 or 1)."
+          fi

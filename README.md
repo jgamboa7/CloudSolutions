@@ -144,7 +144,7 @@ kubectl apply -f=controller-deploy.yaml -f=nlb-deploy.yaml
 ```
 8. You have now provisioned an EKS cluster, configured kubectl, installed Nginx ingress controller and verified that your cluster is ready to use.
 
-### CI/CD pipelines - terraform-plan.yml
+## CI/CD pipelines - terraform-plan.yml
 This GitHub Actions workflow `(.github/workflows/terraform-plan.yml)` automatically runs a Terraform plan whenever a pull request is opened or updated on the main branch where any terraform files were modify.
 It ensures that all infrastructure changes are formatted, validated, and reviewed before being merged.
 
@@ -201,7 +201,7 @@ If successful, the workflow posts a detailed comment on the pull request with:
 13. Post Plan Failure
 If the Terraform plan fails, an error summary is posted as a comment on the PR for debugging.
 
-### CI/CD pipelines - terraform-apply.yml
+## CI/CD pipelines - terraform-apply.yml
 
 This GitHub Actions workflow `(.github/workflows/terraform-apply.yml)` automatically applies Terraform infrastructure changes to production when manually triggered. It’s designed for controlled, auditable, and safe deployments of infrastructure-as-code in AWS.
 

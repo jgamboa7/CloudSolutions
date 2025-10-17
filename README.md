@@ -213,8 +213,6 @@ The goal of this workflow is to:
 
 1. Workflow Triggers
 * The workflow only runs when explicitly triggered via the GitHub UI, ensuring human review occurred before execution.
-* A push to `main` that affects `.tf` files.
-* Manual trigger via workflow_dispatch.
 
 2. Concurrency Control
 

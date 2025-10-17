@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Cloud Solutions Infrastructure
 
 Cloud Solutions Inc., is expanding its infrastructure to support a new web application. The application requires a robust, scalable, and secure environment on AWS.

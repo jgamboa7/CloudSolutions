@@ -96,14 +96,14 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  node_security_group_additional_rules ={
-    ingress_nodes_http={
-      protocol                      = "tcp"
-      from_port                     = 80
-      to_port                       = 80
-      type                          = "ingress"
-      description                   = "Allow http traffic from node security group itself (for Pod-to-Pod communication)"
-      self                          = true
+  node_security_group_additional_rules = {
+    ingress_nodes_http = {
+      protocol    = "tcp"
+      from_port   = 80
+      to_port     = 80
+      type        = "ingress"
+      description = "Allow http traffic from node security group itself (for Pod-to-Pod communication)"
+      self        = true
     }
   }
 

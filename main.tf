@@ -69,7 +69,35 @@ module "eks" {
   create_cloudwatch_log_group = true
 
   addons = {
-    coredns = {}
+    coredns = {
+      configuration_values = jsonencode({
+        tolerations = [
+          {
+            key      = "system"
+            operator = "Equal"
+            value    = "true"
+            effect   = "NoSchedule"
+          }
+        ]
+        affinity = {
+          nodeAffinity = {
+            requiredDuringSchedulingIgnoredDuringExecution = {
+              nodeSelectorTerms = [
+                {
+                  matchExpressions = [
+                    {
+                      key      = "node-type"
+                      operator = "In"
+                      values   = ["system"]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      })
+    }
 
     eks-pod-identity-agent = {
       before_compute = true
@@ -84,9 +112,64 @@ module "eks" {
 
     aws-ebs-csi-driver = {
       service_account_role_arn = module.irsa-ebs-csi.iam_role_arn
+      configuration_values = jsonencode({
+        tolerations = [
+          {
+            key      = "system"
+            operator = "Equal"
+            value    = "true"
+            effect   = "NoSchedule"
+          }
+        ]
+        affinity = {
+          nodeAffinity = {
+            requiredDuringSchedulingIgnoredDuringExecution = {
+              nodeSelectorTerms = [
+                {
+                  matchExpressions = [
+                    {
+                      key      = "node-type"
+                      operator = "In"
+                      values   = ["system"]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      })
     }
 
-    snapshot-controller = {}
+    snapshot-controller = {
+      configuration_values = jsonencode({
+        tolerations = [
+          {
+            key      = "system"
+            operator = "Equal"
+            value    = "true"
+            effect   = "NoSchedule"
+          }
+        ]
+        affinity = {
+          nodeAffinity = {
+            requiredDuringSchedulingIgnoredDuringExecution = {
+              nodeSelectorTerms = [
+                {
+                  matchExpressions = [
+                    {
+                      key      = "node-type"
+                      operator = "In"
+                      values   = ["system"]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      })
+    }
 
     amazon-cloudwatch-observability = {
       service_account_role_arn = module.irsa_cloudwatch_observability.iam_role_arn
@@ -112,7 +195,7 @@ module "eks" {
       name = "system-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.small"]
+      instance_types = ["t3.micro"]
 
       min_size     = 1
       max_size     = 3
@@ -137,6 +220,11 @@ module "eks" {
           }
         }
       }
+
+      labels = {
+        node-type = "system"
+      }
+
     }
 
     critical-workload-node = {
@@ -169,6 +257,10 @@ module "eks" {
         }
       }
 
+      labels = {
+        node-type = "critical"
+      }
+
     }
 
     non-critical-workload-node = {
@@ -195,6 +287,9 @@ module "eks" {
         }
       }
 
+      labels = {
+        node-type = "non-critical"
+      }
     }
   }
 

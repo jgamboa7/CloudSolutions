@@ -108,8 +108,8 @@ module "eks" {
   }
 
   eks_managed_node_groups = {
-    one = {
-      name = "node-group-1"
+    system-node = {
+      name = "system-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = ["t3.small"]
@@ -117,10 +117,30 @@ module "eks" {
       min_size     = 1
       max_size     = 3
       desired_size = 2
+
+      taints = {
+        system-workload = {
+          key    = "system"
+          value  = "true"
+          effect = "NO_SCHEDULE"
+        }
+      }
+
+      launch_template_description = "Node for eks system workload only"
+
+      block_device_mappings = {
+        system-ebs = {
+          device_name = "system-root-volume"
+          ebs = {
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
     }
 
-    two = {
-      name = "node-group-2"
+    critical-workload-node = {
+      name = "critical-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = ["t3.small"]
@@ -128,6 +148,53 @@ module "eks" {
       min_size     = 1
       max_size     = 3
       desired_size = 2
+
+      taints = {
+        critical-workload = {
+          key    = "critical"
+          value  = "true"
+          effect = "NO_SCHEDULE"
+        }
+      }
+
+      launch_template_description = "Node for eks critical workload"
+
+      block_device_mappings = {
+        critical-ebs = {
+          device_name = "critical-root-volume"
+          ebs = {
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
+
+    }
+
+    non-critical-workload-node = {
+      name = "non-critical-workload"
+
+      ami_type       = "AL2023_x86_64_STANDARD"
+      instance_types = ["t3.small"]
+
+      min_size     = 1
+      max_size     = 3
+      desired_size = 2
+
+      capacity_type = "SPOT"
+
+      launch_template_description = "Node for eks non critical workload"
+
+      block_device_mappings = {
+        spot-ebs = {
+          device_name = "spot-root-volume"
+          ebs = {
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
+
     }
   }
 

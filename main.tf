@@ -32,6 +32,102 @@ module "vpc" {
   private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   public_subnets  = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
 
+  private_dedicated_network_acl = true
+
+  private_inbound_acl_rules = [
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 443,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 100,
+      "to_port" : 443
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 80,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 101,
+      "to_port" : 80
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 10250,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 150,
+      "to_port" : 10250
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 53,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 200,
+      "to_port" : 53
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 53,
+      "protocol" : "udp",
+      "rule_action" : "allow",
+      "rule_number" : 250,
+      "to_port" : 53
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 1025,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 300,
+      "to_port" : 65535
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 4443,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 350,
+      "to_port" : 4443
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 6443,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 400,
+      "to_port" : 6443
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 8443,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 450,
+      "to_port" : 8443
+    },
+    {
+      "cidr_block" : "10.0.0.0/16",
+      "from_port" : 9443,
+      "protocol" : "tcp",
+      "rule_action" : "allow",
+      "rule_number" : 450,
+      "to_port" : 9443
+    }
+  ]
+
+  private_outbound_acl_rules = [
+    {
+      "cidr_block" : "0.0.0.0/0",
+      "from_port" : 0,
+      "protocol" : "-1",
+      "rule_action" : "allow",
+      "rule_number" : 100,
+      "to_port" : 0
+    }
+  ]
+
   enable_nat_gateway     = true
   single_nat_gateway     = false
   one_nat_gateway_per_az = true

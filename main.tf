@@ -471,7 +471,7 @@ module "irsa_elb_controller" {
   version = "5.39.0"
 
   create_role                   = true
-  role_name                     = "aws-load-balancer-controller-${module.eks.cluster_name}"
+  role_name                     = "aws-load-balancer-controller"
   provider_url                  = module.eks.oidc_provider
   oidc_fully_qualified_subjects = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
   role_policy_arns              = [aws_iam_policy.aws-elb-controller-policy.arn]

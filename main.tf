@@ -112,7 +112,7 @@ module "vpc" {
       "from_port" : 9443,
       "protocol" : "tcp",
       "rule_action" : "allow",
-      "rule_number" : 450,
+      "rule_number" : 500,
       "to_port" : 9443
     }
   ]

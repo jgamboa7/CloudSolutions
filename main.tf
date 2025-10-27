@@ -460,6 +460,23 @@ module "irsa_cloudwatch_observability" {
   ]
 }
 
+resource "aws_iam_policy" "aws-elb-controller-policy" {
+  name        = "AWSLoadBalancerControllerIAMPolicy"
+  description = "AWS Load Balancer Controller Policy for EKS"
+  policy      = file("./policies/aws_elb/iam_policy.json")
+}
+
+module "irsa_elb_controller" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
+  version = "5.39.0"
+
+  create_role                   = true
+  role_name                     = "aws-load-balancer-controller-${module.eks.cluster_name}"
+  provider_url                  = module.eks.oidc_provider
+  oidc_fully_qualified_subjects = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+  role_policy_arns              = [aws_iam_policy.aws-elb-controller-policy.arn]
+}
+
 resource "aws_sns_topic" "this" {
   name = "SNS-CloudSolution"
 }

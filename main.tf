@@ -4,6 +4,7 @@ provider "aws" {
 
 # Filter out local zones, which are not currently supported 
 # with managed node groups
+
 data "aws_availability_zones" "available" {
   filter {
     name   = "opt-in-status"
@@ -19,6 +20,10 @@ resource "random_string" "suffix" {
   length  = 5
   special = false
 }
+
+################################################################################
+# VPC Configuration
+################################################################################
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
@@ -114,6 +119,14 @@ module "vpc" {
       "rule_action" : "allow",
       "rule_number" : 500,
       "to_port" : 9443
+    },
+    {
+      "cidr_block" : "0.0.0.0/0",
+      "from_port" : 0,
+      "protocol" : "-1",
+      "rule_action" : "allow",
+      "rule_number" : 550,
+      "to_port" : 0
     }
   ]
 
@@ -151,6 +164,10 @@ module "vpc" {
   }
 }
 
+################################################################################
+# EKS Configuration
+################################################################################
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "21.3.1"
@@ -167,30 +184,8 @@ module "eks" {
   addons = {
     coredns = {
       configuration_values = jsonencode({
-        tolerations = [
-          {
-            key      = "system"
-            operator = "Equal"
-            value    = "true"
-            effect   = "NoSchedule"
-          }
-        ]
-        affinity = {
-          nodeAffinity = {
-            requiredDuringSchedulingIgnoredDuringExecution = {
-              nodeSelectorTerms = [
-                {
-                  matchExpressions = [
-                    {
-                      key      = "node-type"
-                      operator = "In"
-                      values   = ["system"]
-                    }
-                  ]
-                }
-              ]
-            }
-          }
+        nodeSelector = {
+          "node-type" : "system"
         }
       })
     }
@@ -209,63 +204,15 @@ module "eks" {
     aws-ebs-csi-driver = {
       service_account_role_arn = module.irsa-ebs-csi.iam_role_arn
       configuration_values = jsonencode({
-        tolerations = [
-          {
-            key      = "system"
-            operator = "Equal"
-            value    = "true"
-            effect   = "NoSchedule"
-          }
-        ]
-        affinity = {
-          nodeAffinity = {
-            requiredDuringSchedulingIgnoredDuringExecution = {
-              nodeSelectorTerms = [
-                {
-                  matchExpressions = [
-                    {
-                      key      = "node-type"
-                      operator = "In"
-                      values   = ["system"]
-                    }
-                  ]
-                }
-              ]
-            }
+        controller = {
+          nodeSelector = {
+            "node-type" : "system"
           }
         }
       })
     }
 
-    snapshot-controller = {
-      configuration_values = jsonencode({
-        tolerations = [
-          {
-            key      = "system"
-            operator = "Equal"
-            value    = "true"
-            effect   = "NoSchedule"
-          }
-        ]
-        affinity = {
-          nodeAffinity = {
-            requiredDuringSchedulingIgnoredDuringExecution = {
-              nodeSelectorTerms = [
-                {
-                  matchExpressions = [
-                    {
-                      key      = "node-type"
-                      operator = "In"
-                      values   = ["system"]
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      })
-    }
+    snapshot-controller = {}
 
     amazon-cloudwatch-observability = {
       service_account_role_arn = module.irsa_cloudwatch_observability.iam_role_arn
@@ -286,21 +233,25 @@ module "eks" {
     }
   }
 
+  ################################################################################
+  # EKS Managed Node Group
+  ################################################################################
+
   eks_managed_node_groups = {
     system-node = {
       name = "system-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.micro"]
+      instance_types = ["t3.small"]
 
       min_size     = 1
-      max_size     = 3
-      desired_size = 2
+      max_size     = 5
+      desired_size = 3
 
       taints = {
-        system-workload = {
-          key    = "system"
-          value  = "true"
+        taint1 = {
+          key    = "CriticalAddonsOnly"
+          value  = null
           effect = "NO_SCHEDULE"
         }
       }
@@ -309,7 +260,7 @@ module "eks" {
 
       block_device_mappings = {
         system-ebs = {
-          device_name = "system-root-volume"
+          device_name = "/dev/xvda"
           ebs = {
             encrypted             = true
             delete_on_termination = true
@@ -318,7 +269,7 @@ module "eks" {
       }
 
       labels = {
-        node-type = "system"
+        node-type = "system",
       }
 
     }
@@ -345,7 +296,7 @@ module "eks" {
 
       block_device_mappings = {
         critical-ebs = {
-          device_name = "critical-root-volume"
+          device_name = "/dev/xvda"
           ebs = {
             encrypted             = true
             delete_on_termination = true
@@ -375,7 +326,7 @@ module "eks" {
 
       block_device_mappings = {
         spot-ebs = {
-          device_name = "spot-root-volume"
+          device_name = "/dev/xvda"
           ebs = {
             encrypted             = true
             delete_on_termination = true
@@ -389,23 +340,27 @@ module "eks" {
     }
   }
 
-  access_entries = {
-    admin_access_entry = {
-      principal_arn = var.eksAdmin
-      type          = "STANDARD"
+  # access_entries = {
+  #   admin_access_entry = {
+  #     principal_arn = var.eksAdmin
+  #     type          = "STANDARD"
 
-      policy_associations = {
-        EKSAdminPolicy = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-  }
+  #     policy_associations = {
+  #       EKSAdminPolicy = {
+  #         policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  #         access_scope = {
+  #           type = "cluster"
+  #         }
+  #       }
+  #     }
+  #   }
+  # }
 
 }
+
+################################################################################
+# IAM Policies & IRSA Accounts
+################################################################################
 
 data "aws_iam_policy" "vpc_cni_policy" {
   arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
@@ -476,6 +431,10 @@ module "irsa_elb_controller" {
   oidc_fully_qualified_subjects = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
   role_policy_arns              = [aws_iam_policy.aws-elb-controller-policy.arn]
 }
+
+################################################################################
+# SNS Topic & CloudWatch
+################################################################################
 
 resource "aws_sns_topic" "this" {
   name = "SNS-CloudSolution"
@@ -584,6 +543,10 @@ resource "aws_cloudwatch_metric_alarm" "pod_restarts" {
 
   alarm_actions = [aws_sns_topic.this.arn]
 }
+
+################################################################################
+# AWS BackUp
+################################################################################
 
 module "backup" {
   source  = "cloudposse/backup/aws"

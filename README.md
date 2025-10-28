@@ -94,6 +94,7 @@ Alarms:
 * AWS CLI configured with admin access
 * Terraform >= 1.6
 * kubectl & aws-iam-authenticator installed
+* Helm
 * An S3 bucket for Terraform state backend block configuration
 * Download [ALB NGINX ingress controller](https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.3/deploy/static/provider/cloud/deploy.yaml) and [ALB NGINX ingress controller for AWS](https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.3/deploy/static/provider/aws/nlb-with-tls-termination/deploy.yaml)
 
@@ -143,6 +144,34 @@ cd nginx-ingress-controller
 kubectl apply -f=controller-deploy.yaml -f=nlb-deploy.yaml
 ```
 8. You have now provisioned an EKS cluster, configured kubectl, installed Nginx ingress controller and verified that your cluster is ready to use.
+
+### Install AWS-elb-controller instead
+#### Prerequisites:
+* Cluster Name
+* service Account ARN for aws-load-balancer-controller role
+
+1. You will find the Helm chart in the folder aws-load-banalancer-controller. values files was modified to satisfied node taints
+
+2. Helm does not install automatically the Crds. Therefore, manual installation is required or can be done through automation.
+``` Bash
+kubectl apply -f aws-load-balancer-controller/crds/crds.yaml 
+```
+
+3. Install the AWS Load Balancer Controller
+```Bash
+helm install  aws-elb-controller ./aws-load-balancer-controller -f ./aws-load-balancer-controller/elbvalues.yaml -n kube-system
+```
+
+4. Verify that the controller is installed
+```Bash
+kubectl get deployment -n kube-system aws-load-balancer-controller
+```
+
+  An example output is as follows
+  ```Bash
+  NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+  aws-load-balancer-controller   2/2     2            2           84s
+  ```
 
 ## CI/CD pipelines - terraform-plan.yml
 This GitHub Actions workflow `(.github/workflows/terraform-plan.yml)` automatically runs a Terraform plan whenever a pull request is opened or updated on the main branch where any terraform files were modify.

@@ -340,21 +340,21 @@ module "eks" {
     }
   }
 
-  # access_entries = {
-  #   admin_access_entry = {
-  #     principal_arn = var.eksAdmin
-  #     type          = "STANDARD"
+  access_entries = {
+    admin_access_entry = {
+      principal_arn = var.eksAdmin
+      type          = "STANDARD"
 
-  #     policy_associations = {
-  #       EKSAdminPolicy = {
-  #         policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  #         access_scope = {
-  #           type = "cluster"
-  #         }
-  #       }
-  #     }
-  #   }
-  # }
+      policy_associations = {
+        EKSAdminPolicy = {
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
 
 }
 

@@ -243,8 +243,8 @@ jobs:
           -f ./aws-load-balancer-controller/elbvalues.yaml \
           -n kube-system \
           --set clusterName=$CLUSTER_NAME \
-          --set serviceAccount.annotations="eks.amazonaws.com/role-arn: ${{ env.IRSA_ARN }}" \
-          --set vpcId=$VPC_ID\
+          --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$IRSA_ARN \
+          --set vpcId=$VPC_ID \
           --version 1.14.0 \
           | tee elb_logs.txt
 

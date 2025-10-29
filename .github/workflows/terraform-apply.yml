@@ -25,12 +25,17 @@ concurrency:
 jobs:
   apply:
     name: Terraform Apply
-    runs-on: ubuntu-latest
     permissions:  
           id-token: write
           contents: read
           actions: read
           pull-requests: write
+    runs-on: ubuntu-latest
+    environment: Production
+    outputs:
+      cluster_name: ${{ steps.gen_output.outputs.cluster_name }}
+      irsa_arn: ${{ steps.gen_output.outputs.irsa_arn }}
+      vpc_id: ${{ steps.gen_output.outputs.vpc_id }}
     defaults:
       run:
         shell: bash
@@ -140,6 +145,20 @@ jobs:
           name: terraform-apply-logs
           path: apply.txt
 
+      - name: Generate outputs
+        if: ${{ steps.apply.outcome == 'success' }}
+        id: gen_output
+        run: |
+          TF_OUTPUT_JSON=$(terraform output -json)
+
+          CLUSTER_NAME=$(echo "$TF_OUTPUT_JSON" | jq -r '.cluster_name.value')
+          IRSA_ARN=$(echo "$TF_OUTPUT_JSON" | jq -r '.irsa_arn.value')
+          VPC_ID=$(echo "$TF_OUTPUT_JSON" | jq -r '.vpc_id.value')
+
+          echo "cluster_name=$CLUSTER_NAME" >> "$GITHUB_OUTPUT"
+          echo "irsa_arn=$IRSA_ARN" >> "$GITHUB_OUTPUT"
+          echo "vpc_id=$VPC_ID" >> "$GITHUB_OUTPUT"
+
       - name: Add Apply Comment
         if: always()
         uses: peter-evans/create-or-update-comment@v4
@@ -180,3 +199,87 @@ jobs:
           else
             echo "Apply skipped: No changes detected in plan (Exit Code 0 or 1)."
           fi
+  helm-elb-installation:
+    name: elb-installation
+    permissions:  
+          id-token: write
+          contents: read
+          actions: read
+          pull-requests: write 
+    needs: apply
+    if: ${{ success()}}
+    runs-on: ubuntu-latest
+    environment: Production
+    defaults:
+      run:
+        shell: bash
+    env: 
+      CLUSTER_NAME: ${{ needs.apply.outputs.cluster_name }}
+      IRSA_ARN: ${{ needs.apply.outputs.irsa_arn }}
+      VPC_ID: ${{  needs.apply.outputs.vpc_id }}      
+      AWS_REGION: ${{ secrets.AWS_REGION}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+            role-to-assume: ${{secrets.ROLE_TO_ASSUME}}
+            aws-region: ${{secrets.AWS_REGION}}
+
+      - name: Configure Kubectl
+        run: |
+          aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+
+      - name: Install CRDs
+        run: |
+          kubectl apply -f ./aws-load-balancer-controller/crds/crds.yaml
+
+      - name: Install load balancer controller
+        id: controller-install  
+        run: |
+          helm upgrade --install aws-load-balancer-controller ./aws-load-balancer-controller \
+          -f ./aws-load-balancer-controller/elbvalues.yaml \
+          -n kube-system \
+          --set clusterName=$CLUSTER_NAME \
+          --set serviceAccount.annotations="eks.amazonaws.com/role-arn: ${{ env.IRSA_ARN }}" \
+          --set vpcId=$VPC_ID\
+          --version 1.14.0 \
+          | tee elb_logs.txt
+
+          HELM_LOGS=$(cat elb_logs.txt)
+          echo "helm_logs<<EOF" >> $GITHUB_OUTPUT
+          echo "$HELM_LOGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload helm logs 
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-logs
+          path: elb_logs.txt
+
+      - name: Add helm Comment
+        if: always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.pr_number }}
+          body: |
+            # Deployment to ${{ github.event.inputs.environment }}
+
+            <details><summary>########## Helm Logs ##########</summary>
+
+            ########################## HELM ##########################
+            ${{ steps.controller-install.outputs.helm_logs}}
+            ###########################################################
+
+            </details>
+
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+              
+          edit-mode: replace
+          comment-tag: terraform-apply-comment
+
+          

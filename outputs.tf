@@ -17,3 +17,12 @@ output "cluster_name" {
   description = "Kubernetes Cluster Name"
   value       = module.eks.cluster_name
 }
+
+output "irsa_arn" {
+  description = "ARN of the aws load balancer controller IRSA account"
+  value       = module.irsa_elb_controller.iam_role_arn
+}
+
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}

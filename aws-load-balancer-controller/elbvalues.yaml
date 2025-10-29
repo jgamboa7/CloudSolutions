@@ -32,7 +32,6 @@ serviceAccount:
   create: true
   # Annotations to add to the service account
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::826589250962:role/aws-load-balancer-controller
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: aws-load-balancer-controller
@@ -142,7 +141,7 @@ certManager:
   revisionHistoryLimit:
 
 # The name of the Kubernetes cluster. A non-empty value is required
-clusterName: CloudSolutions-ki30s
+clusterName: 
 
 # cluster contains configurations specific to the kubernetes cluster
 cluster:
@@ -185,7 +184,7 @@ createIngressClassResource: true
 region: eu-central-1
 
 # The VPC ID for the Kubernetes cluster. Set this manually when your pods are unable to use the metadata service to determine this automatically
-vpcId: vpc-0802959b57cf8552c
+vpcId:
 
 # This is alternative to vpcId. Set this when your pods are unable to use the metadata service to determine VPC automatically.
 vpcTags: {}

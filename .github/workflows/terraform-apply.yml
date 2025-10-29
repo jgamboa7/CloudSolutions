@@ -31,7 +31,7 @@ jobs:
           actions: read
           pull-requests: write
     runs-on: ubuntu-latest
-    environment: Production
+    environment: ${{ github.event.inputs.environment}}
     outputs:
       cluster_name: ${{ steps.gen_output.outputs.cluster_name }}
       irsa_arn: ${{ steps.gen_output.outputs.irsa_arn }}
@@ -209,7 +209,7 @@ jobs:
     needs: apply
     if: ${{ success()}}
     runs-on: ubuntu-latest
-    environment: Production
+    environment: ${{ github.event.inputs.environment}}
     defaults:
       run:
         shell: bash

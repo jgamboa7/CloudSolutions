@@ -278,11 +278,11 @@ module "eks" {
       name = "critical-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.small"]
+      instance_types = ["t3.large"]
 
       min_size     = 1
-      max_size     = 3
-      desired_size = 2
+      max_size     = 5
+      desired_size = 3
 
       taints = {
         critical-workload = {
@@ -314,7 +314,7 @@ module "eks" {
       name = "non-critical-workload"
 
       ami_type       = "AL2023_x86_64_STANDARD"
-      instance_types = ["t3.small"]
+      instance_types = ["t3.large"]
 
       min_size     = 1
       max_size     = 3
@@ -340,21 +340,21 @@ module "eks" {
     }
   }
 
-  access_entries = {
-    admin_access_entry = {
-      principal_arn = var.eksAdmin
-      type          = "STANDARD"
+  # access_entries = {
+  #   admin_access_entry = {
+  #     principal_arn = var.eksAdmin
+  #     type          = "STANDARD"
 
-      policy_associations = {
-        EKSAdminPolicy = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-          access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-  }
+  #     policy_associations = {
+  #       EKSAdminPolicy = {
+  #         policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  #         access_scope = {
+  #           type = "cluster"
+  #         }
+  #       }
+  #     }
+  #   }
+  # }
 
 }
 

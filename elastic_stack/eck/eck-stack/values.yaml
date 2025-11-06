@@ -5,19 +5,132 @@
 # If enabled, will use the eck-elasticsearch chart and deploy an Elasticsearch resource.
 #
 eck-elasticsearch:
-  enabled: true
+  enabled: true  
+
+  image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+
+  volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: gp3
   # This is adjusting the full name of the elasticsearch resource so that both the eck-elasticsearch
   # and the eck-kibana chart work together by default in the eck-stack chart.
   fullnameOverride: cloudsolution-elasticsearch
+
+  nodeSets:
+    - name: master
+      count: 1
+
+      podTemplate:
+        spec:
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: node-type
+                        operator: In
+                        values:
+                          - critical
+                          - system
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: node-type
+                        operator: In
+                        values:
+                          - critical
+
+          tolerations:
+            - key: "CriticalAddonsOnly"
+              operator: "Exists"
+              effect: "NoSchedule"
+            - key: "critical"
+              operator: "Exists"
+              effect: "NoSchedule"
+
+          containers:
+            - name: elasticsearch
+              resources:
+                limits:
+                  memory: 2Gi
+                requests:
+                  memory: 2Gi
+      
 
 # If enabled, will use the eck-kibana chart and deploy a Kibana resource.
 #
 eck-kibana:
   enabled: true
+
+  image: docker.elastic.co/kibana/kibana:9.2.0
   # This is also adjusting the kibana reference to the elasticsearch resource named previously so that
   # both the eck-elasticsearch and the eck-kibana chart work together by default in the eck-stack chart.
   elasticsearchRef:
     name: cloudsolution-elasticsearch
+    namespace: elastic-stack
+
+  config:
+    server.host: "0.0.0.0"
+    server.port: 5601
+    # server.basePath: "/kibana"
+    # server.rewriteBasePath: true
+    xpack.security.enabled: false
+    # xpack.security.http.ssl.enabled: true
+    # xpack.security.http.ssl.key: /usr/share/kibana/config/certs/tls.key
+    # xpack.security.http.ssl.certificate: /usr/share/kibana/config/certs/tls.crt
+
+  podTemplate:
+  spec:
+    nodeSelector:
+      node-type: non-critical
+    containers:
+      - name: kibana
+        readinessProbe:
+          httpGet:
+            path: /api/status          
+            port: 5601
+            scheme: HTTP          
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            scheme: HTTP
+            port: 5601
+            path: /api/status
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          failureThreshold: 10
+
+  ingress:
+    enabled: true
+
+    annotations:
+      alb.ingress.kubernetes.io/scheme: "internet-facing"
+      alb.ingress.kubernetes.io/target-type: "ip"
+      alb.ingress.kubernetes.io/healthcheck-path: /api/status
+      alb.ingress.kubernetes.io/healthcheck-port: "5601"
+      alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+      alb.ingress.kubernetes.io/backend-protocol: HTTP   
+
+    className: alb
+
+    pathType: Prefix
+
+    hosts:
+      - host: k8s-elastics-eckstack-c7b39e055c-1966746438.eu-central-1.elb.amazonaws.com
+        path: /
+
+    tls:
+      enabled: false
 
 # If enabled, will use the eck-agent chart and deploy an Elastic Agent instance.
 #

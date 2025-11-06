@@ -53,7 +53,7 @@ elasticsearchRef:
   # If not specified, then the namespace of the Kibana resource
   # will be assumed.
   #
-  namespace: logging
+  namespace: elastic-stack
   #
   # Optional secretName referencing an existing Kubernetes secret that contains connection information
   # for associating a Kibana instance to a remote Elasticsearch instance not managed by ECK.
@@ -73,11 +73,11 @@ elasticsearchRef:
 # The Kibana configuration (kibana.yml)
 # ref: https://www.elastic.co/guide/en/kibana/current/settings.html
 #
-config:
-  server.host: "0.0.0.0"
-  server.port: 5601
-  server.basePath: "/kibana"
-  server.rewriteBasePath: true
+config: null
+#   server.host: "0.0.0.0"
+#   server.port: 5601
+#   server.basePath: "/kibana"
+#   server.rewriteBasePath: true
 
 # The HTTP layer configuration for Kibana.
 #
@@ -87,10 +87,10 @@ config:
 # PodTemplate provides customisation options (labels, annotations, affinity rules,
 # resource requests, and so on) for the Kibana pods
 #
-podTemplate:
-  spec:
-    nodeSelector:
-      node-type: non-critical
+# podTemplate:
+#   spec:
+#     nodeSelector:
+#       node-type: non-critical
 
 # Number of revisions to retain to allow rollback in the underlying deployment.
 # By default, if not set, Kubernetes sets 10.
@@ -136,7 +136,7 @@ monitoring: {}
 # - Nginx: https://kubernetes.github.io/ingress-nginx/
 #
 ingress:
-  enabled: true
+  enabled: false
 
   # Annotations that will be applied to the Ingress resource. Note that some ingress controllers are controlled via annotations.
   #
@@ -147,9 +147,9 @@ ingress:
   #   kubernetes.io/ingress.class: gce-internal # Configures the Ingress resource to use the GCE ingress controller and create an internal Application Load Balancer.
   #   kubernetes.io/ingress.class: nginx        # Configures the Ingress resource to use the NGINX ingress controller.
   #
-  annotations:
-    alb.ingress.kubernetes.io/scheme: "internet-facing"
-    alb.ingress.kubernetes.io/target-type: "ip"
+  annotations: {}
+    # alb.ingress.kubernetes.io/scheme: "internet-facing"
+    # alb.ingress.kubernetes.io/target-type: "ip"
 
   # Labels that will be applied to the Ingress resource.
   #
@@ -177,7 +177,7 @@ ingress:
   # ref: https://kubernetes.io/docs/concepts/services-networking/ingress/#name-based-virtual-hosting
   #
   hosts:
-    - host: chart-example.local
+    - host: k8s-elastics-eckstack-c7b39e055c-1915555171.eu-central-1.elb.amazonaws.com
       path: /kibana
 
   # TLS defines whether TLS will be enabled on the Ingress resource.

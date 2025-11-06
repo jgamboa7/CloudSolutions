@@ -22,7 +22,7 @@ version: 9.2.0
 
 # Elasticsearch Docker image to deploy
 #
-image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+# image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
 
 # Labels that will be applied to Elasticsearch.
 #
@@ -167,7 +167,7 @@ volumeClaimDeletePolicy: ""
 #
 nodeSets:
 - name: master
-  count: 2
+  count: 1
   config:
     # Comment out when setting the vm.max_map_count via initContainer, as these are mutually exclusive.
     # For production workloads, it is strongly recommended to increase the kernel setting vm.max_map_count to 262144
@@ -188,24 +188,24 @@ nodeSets:
       # If specified, the pod's scheduling constraints
       # https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-advanced-node-scheduling.html
       # https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-type
-                operator: In
-                values:
-                - critical
-                - system
-          preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
-                  - key: node-type
-                    operator: In
-                    values:
-                    - critical
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #       - matchExpressions:
+      #         - key: node-type
+      #           operator: In
+      #           values:
+      #           - critical
+      #           - system
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #         - weight: 100
+      #           preference:
+      #             matchExpressions:
+      #             - key: node-type
+      #               operator: In
+      #               values:
+      #               - critical
 
       # Containers array.  Should only be used to customize the 'elasticsearch' container using the following fields.
       containers:
@@ -291,6 +291,7 @@ nodeSets:
     # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
     # https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-advanced-node-scheduling.html
     # nodeSelector:
+    #   node-type: critical
     #   diskType: ssd
     #   environment: production
 
@@ -312,13 +313,14 @@ nodeSets:
 
     # If specified, the pod's tolerations that will apply to all containers within the pod.
     # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-    tolerations:
-      - key: "CriticalAddonsOnly"
-        effect: "NoSchedule"
-        operator: "Exists"
-      - key: "critical"
-        effect: "NoSchedule"
-        operator: "Exists"
+    # tolerations: 
+    #   - key: "CriticalAddonsOnly"
+    #     effect: "NoSchedule"
+    #     operator: "Exists"
+    #   - key: "critical"
+    #     operator: "Exists"
+    #     effect: "NoSchedule"
+        
 
     # TopologySpreadConstraints describes how a group of pods ought to spread across topology domains.
     # Scheduler will schedule pods in a way which abides by the constraints. All topologySpreadConstraints are ANDed.

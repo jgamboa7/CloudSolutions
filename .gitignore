@@ -9,6 +9,8 @@ assets/diagram-code/*
 plan.txt
 project.tar.gz
 addons-schemes/*
+kibana.yaml.bak
+
 
 #################################################################
 # Default .gitignore content for all terraform-aws-modules below

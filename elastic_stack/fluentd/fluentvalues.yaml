@@ -1,0 +1,524 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# DaemonSet, Deployment or StatefulSet
+kind: "Deployment"
+# azureblob, cloudwatch, elasticsearch7, elasticsearch8, gcs, graylog , kafka, kafka2, kinesis, opensearch
+variant: elasticsearch8
+# # Only applicable for Deployment or StatefulSet
+replicaCount: 1
+
+image:
+  repository: "fluent/fluentd-kubernetes-daemonset"  
+  pullPolicy: "IfNotPresent"
+  tag: "v1.19.0-debian-elasticsearch8-1.1"
+
+## Optional array of imagePullSecrets containing private registry credentials
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: null
+
+rbac:
+  create: true
+
+# from Kubernetes 1.25, PSP is deprecated
+# See: https://kubernetes.io/blog/2022/08/23/kubernetes-v1-25-release/#pod-security-changes
+# We automatically disable PSP if Kubernetes version is 1.25 or higher
+podSecurityPolicy:
+  enabled: true
+  annotations: {}
+
+## Security Context policies for controller pods
+## See https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/ for
+## notes on enabling and using sysctls
+##
+podSecurityContext: {}
+  # seLinuxOptions:
+  #   type: "spc_t"
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+# Configure the livecycle
+# Ref: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/
+lifecycle: {}
+  # preStop:
+  #   exec:
+  #     command: ["/bin/sh", "-c", "sleep 20"]
+
+# Configure the livenessProbe
+# Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+livenessProbe:
+  httpGet:
+    path: /metrics
+    port: metrics
+  # initialDelaySeconds: 0
+  # periodSeconds: 10
+  # timeoutSeconds: 1
+  # successThreshold: 1
+  # failureThreshold: 3
+
+# Configure the readinessProbe
+# Ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+readinessProbe:
+  httpGet:
+    path: /metrics
+    port: metrics
+  # initialDelaySeconds: 0
+  # periodSeconds: 10
+  # timeoutSeconds: 1
+  # successThreshold: 1
+  # failureThreshold: 3
+
+resources: 
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+## only available if kind is Deployment
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+  ## see https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/#autoscaling-on-multiple-metrics-and-custom-metrics
+  customRules: []
+    # - type: Pods
+    #   pods:
+    #     metric:
+    #       name: packets-per-second
+    #     target:
+    #       type: AverageValue
+    #       averageValue: 1k
+  ## see https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#support-for-configurable-scaling-behavior
+  # behavior:
+  #   scaleDown:
+  #     policies:
+  #       - type: Pods
+  #         value: 4
+  #         periodSeconds: 60
+  #       - type: Percent
+  #         value: 10
+  #         periodSeconds: 60
+
+# priorityClassName: "system-node-critical"
+
+nodeSelector: {}
+
+## Node tolerations for server scheduling to nodes with taints
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
+##
+tolerations: 
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "critical"
+    operator: "Exists"
+    effect: "NoSchedule"
+# - key: null
+#   operator: Exists
+#   effect: "NoSchedule"
+
+## Affinity and anti-affinity
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+##
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-type
+              operator: In
+              values:
+                - critical
+                - system
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: node-type
+              operator: In
+              values:
+                - critical
+
+## Annotations to be added to fluentd DaemonSet/Deployment
+##
+annotations: {}
+
+## Labels to be added to fluentd DaemonSet/Deployment
+##
+labels: {}
+
+## Annotations to be added to fluentd pods
+##
+podAnnotations: {}
+
+## Labels to be added to fluentd pods
+##
+podLabels: {}
+
+## How long (in seconds) a pods needs to be stable before progressing the deployment
+##
+minReadySeconds: 10
+
+## How long (in seconds) a pod may take to exit (useful with lifecycle hooks to ensure lb deregistration is done)
+##
+terminationGracePeriodSeconds: 60
+
+## Deployment strategy / DaemonSet updateStrategy
+##
+updateStrategy: {}
+#   type: RollingUpdate
+#   rollingUpdate:
+#     maxUnavailable: 1
+
+## Additional environment variables to set for fluentd pods
+env:
+  # - name: "FLUENTD_CONF"
+  #   value: "../../../etc/fluent/fluent.conf"
+  - name: FLUENT_ELASTICSEARCH_HOST
+    value: "elasticsearch-master"
+  - name: FLUENT_ELASTICSEARCH_PORT
+    value: "9200"
+  - name: FLUENT_ELASTICSEARCH_SCHEME
+    value: https
+  - name: FLUENT_ELASTICSEARCH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-master-credentials
+        key: password
+  - name: FLUENT_ELASTICSEARCH_CA_FILE
+    value: "/fluentd/certs/ca.crt"
+  - name: SSL_CERT_FILE
+    value: "/fluentd/certs/ca.crt"
+
+
+envFrom: []
+
+initContainers: []
+
+## Name of the configMap containing a custom fluentd.conf configuration file to use instead of the default.
+# mainConfigMapNameOverride: ""
+
+## Name of the configMap containing files to be placed under /etc/fluent/config.d/
+## NOTE: This will replace ALL default files in the aforementioned path!
+# extraFilesConfigMapNameOverride: ""
+
+mountVarLogDirectory: true
+mountDockerContainersDirectory: true
+
+volumes:
+  - name: fluentd-es-certs
+    secret:
+      secretName: elasticsearch-master-certs
+      items:
+        - key: ca.crt
+          path: ca.crt
+
+volumeMounts:
+  - name: fluentd-es-certs
+    mountPath: /fluentd/certs
+    readOnly: true
+
+## Only available if kind is StatefulSet
+## Fluentd persistence
+##
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+## Fluentd service
+##
+service:
+  enabled: true
+  type: "ClusterIP"
+  annotations: {}
+  # loadBalancerIP:
+  # externalTrafficPolicy: Local
+  ports: 
+  - name: "forwarder"
+    protocol: TCP
+    containerPort: 24224
+
+## Prometheus Monitoring
+##
+metrics:
+  serviceMonitor:
+    enabled: false
+    additionalLabels:
+      release: prometheus-operator
+    namespace: ""
+    namespaceSelector: {}
+    ## metric relabel configs to apply to samples before ingestion.
+    ##
+    metricRelabelings: []
+    # - sourceLabels: [__name__]
+    #   separator: ;
+    #   regex: ^fluentd_output_status_buffer_(oldest|newest)_.+
+    #   replacement: $1
+    #   action: drop
+    ## relabel configs to apply to samples after ingestion.
+    ##
+    relabelings: []
+    # - sourceLabels: [__meta_kubernetes_pod_node_name]
+    #   separator: ;
+    #   regex: ^(.*)$
+    #   targetLabel: nodename
+    #   replacement: $1
+    #   action: replace
+    ## Additional serviceMonitor config
+    ##
+    # jobLabel: fluentd
+    # scrapeInterval: 30s
+    # scrapeTimeout: 5s
+    # honorLabels: true
+
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    namespace: ""
+    rules: []
+    # - alert: FluentdDown
+    #   expr: up{job="fluentd"} == 0
+    #   for: 5m
+    #   labels:
+    #     context: fluentd
+    #     severity: warning
+    #   annotations:
+    #     summary: "Fluentd Down"
+    #     description: "{{ $labels.pod }} on {{ $labels.nodename }} is down"
+    # - alert: FluentdScrapeMissing
+    #   expr: absent(up{job="fluentd"} == 1)
+    #   for: 15m
+    #   labels:
+    #     context: fluentd
+    #     severity: warning
+    #   annotations:
+    #     summary: "Fluentd Scrape Missing"
+    #     description: "Fluentd instance has disappeared from Prometheus target discovery"
+
+## Grafana Monitoring Dashboard
+##
+dashboards:
+  enabled: "true"
+  namespace: ""
+  labels:
+    grafana_dashboard: '"1"'
+
+## Fluentd list of plugins to install
+##
+plugins: []
+  # - fluent-plugin-rewrite-tag-filter
+# - fluent-plugin-out-http
+
+## Add fluentd config files from K8s configMaps
+##
+configMapConfigs: []
+#  - fluentd-prometheus-conf
+#  - fluentd-systemd-conf
+
+## Fluentd configurations:
+##
+fileConfigs:
+  01_sources.conf: |-
+    ## 1. Network Input from Fluent Bit Forwarders
+    <source>
+      @type forward
+      @id input_fluentbit
+      # Listen on the standard port for the Forward protocol
+      port 24224
+      bind 0.0.0.0
+      @label @KUBERNETES
+
+      # Optional: If you need TLS for secure log forwarding:
+      # <security>
+      #   self_hostname YOUR_FLUENTD_HOSTNAME
+      #   shared_key YOUR_SECRET_KEY
+      #   <transport>
+      #     version TLSv1_2
+      #     ca_path /path/to/ca.crt
+      #     cert_path /path/to/server.crt
+      #     private_key_path /path/to/server.key
+      #   </transport>
+      # </security>
+    </source>
+
+    # expose metrics in prometheus format
+    <source>
+      @type prometheus
+      bind 0.0.0.0
+      port 24231
+      metrics_path /metrics
+    </source>
+
+  02_filters.conf: |-
+    <label @KUBERNETES>  
+      <filter **>
+        @type record_transformer
+        @id add_cluster_info
+        # Add a field to every log record indicating which cluster/environment it came from
+        <record>
+          cluster_name "CloudSolutions"
+        </record>
+      </filter>
+
+      <match **>
+        @type relabel
+        @label @DISPATCH
+      </match>
+    </label>
+
+  03_dispatch.conf: |-
+    <label @DISPATCH>      
+      <match kubernetes.**>
+        @type rewrite_tag_filter
+        @id router_by_namespace        
+
+       #   Rule 1: Send 'kube-system' logs to a dedicated, low-volume output
+        <rule>
+          key $.kubernetes.namespace_name
+          pattern ^(kube-system|default)$
+          tag logging.system
+        </rule>
+
+       #   Rule 2: Send all other logs (application logs) to the main output
+        # <rule>
+        #   key $.kubernetes.namespace_name
+        #   pattern /^(?!kube-system|default).*$/
+        #   tag logging.application
+        # </rule>
+
+        <rule>
+          key $.kubernetes.namespace_name
+          pattern /.+/ 
+          tag logging.application
+        </rule>
+      </match>
+     
+      <match host.**>
+        @type rewrite_tag_filter
+        @id router_by_host_logs 
+        
+        # All host.* logs are generally considered system logs.
+        # Retag them to the system logging output.
+        <rule>
+          key tag
+          pattern /host\..*/
+          tag logging.system
+        </rule>
+      </match>
+
+      <match **>
+        @type relabel
+        @label @OUTPUT
+      </match>
+    </label>
+
+  04_outputs.conf: |-
+    <label @OUTPUT>
+      ## 1. Application Logs - Primary Index
+      <match logging.application>
+        @type elasticsearch
+        @id output_app_logs
+        # Connection
+        host "#{ENV['FLUENT_ELASTICSEARCH_HOST']}"
+        port "#{ENV['FLUENT_ELASTICSEARCH_PORT']}"
+        scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME']}"
+        user elastic       
+        password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
+        
+        # Index Management (Highly Recommended)
+        # Daily index: e.g., fluentd-app-2025.11.03
+        logstash_format true
+        logstash_prefix fluentd-app
+        include_tag_key false
+
+        # Use CA certificate
+        ssl_verify true
+        ca_file /fluentd/certs/ca.crt
+        # ssl_ca_file /fluentd/certs/ca.crt
+        # ssl_verify_mode peer_ca
+
+        # Buffering for Reliability (CRITICAL)
+        <buffer tag>
+          @type file
+          path /var/log/fluentd/buffer/app
+          flush_interval 2s         # How often to flush the buffer
+          chunk_limit_size 16M       # Max size of a chunk before flushing
+          queue_limit_length 32     # Max number of chunks to queue
+          retry_forever false           # Number of retries before dropping/erroring (approx 2.4 days)
+          total_limit_size 2G       # Max total buffer size (adjust based on storage/logs)
+        </buffer>
+      </match>
+    
+      ## 2. System Logs - Dedicated Index (Optional, often lower retention)
+      <match logging.system>
+        @type elasticsearch
+        @id output_system_logs
+        # Inherits connection details from app logs (host, port, user/pass)
+        host "#{ENV['FLUENT_ELASTICSEARCH_HOST']}"
+        port "#{ENV['FLUENT_ELASTICSEARCH_PORT']}"
+        scheme "#{ENV['FLUENT_ELASTICSEARCH_SCHEME']}"
+        user elastic
+        password "#{ENV['FLUENT_ELASTICSEARCH_PASSWORD']}"
+
+        # Index Management (Separate index for system logs)
+        # e.g., fluentd-system-2025.11.03
+        logstash_format true
+        logstash_prefix fluentd-system
+        include_tag_key false
+
+        # Use CA certificate
+        ssl_verify true
+        ca_file /fluentd/certs/ca.crt
+        # ssl_ca_file /fluentd/certs/ca.crt
+        # ssl_verify_mode peer_ca
+
+        # Buffering (Can be less aggressive if these logs are lower priority)
+        <buffer tag>
+          @type file
+          path /var/log/fluentd/buffer/sys
+          flush_interval 2s         
+          chunk_limit_size 16M      
+          queue_limit_length 32    
+          retry_forever false
+          total_limit_size 2G 
+        </buffer>
+      </match>
+    
+      ## 3. Fallback: Discard Unmatched Logs (Safety Net)
+      # Any log that failed to match a tag in 03_dispatch.conf is discarded here.
+      <match **>
+        @type null
+        @id output_discard_unmatched
+      </match>
+    </label>
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    # - host: fluentd.example.tld
+    - port: 9880
+
+  tls: []
+  # - secretName: fluentd-tls
+  #   hosts:
+  #     - fluentd.example.tld

@@ -282,4 +282,79 @@ jobs:
           edit-mode: replace
           comment-tag: terraform-apply-comment
 
+  helm-elk-installation:
+    name: elk-installation
+    permissions:  
+          id-token: write
+          contents: read
+          actions: read
+          pull-requests: write 
+    needs: helm-elb-installation
+    if: ${{ success()}}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment}}
+    defaults:
+      run:
+        shell: bash
+    env: 
+      CLUSTER_NAME: ${{ needs.apply.outputs.cluster_name }}     
+      AWS_REGION: ${{ secrets.AWS_REGION}}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+            role-to-assume: ${{secrets.ROLE_TO_ASSUME}}
+            aws-region: ${{secrets.AWS_REGION}}
+
+      - name: Configure Kubectl
+        run: |
+          aws eks --region $AWS_REGION update-kubeconfig --name $CLUSTER_NAME
+
+      - name: storageclass
+        id: storage  
+        run: kubectl apply -f ./k8s/storageclass/es-storageclass.yaml 
+
+      - name: install Elasticsearch
+        id: elasticsearch
+        run: helm upgrade --install elk-elasticsearch ./elastic_stack/elasticsearch/ -n elastic-stack -f ./elastic_stack/elasticsearch/myvalues.yaml --create-namespace
+
+      - name: install kibana 
+        id: kibana
+        if: ${{ success()}}  
+        run: helm upgrade --install elk-kibana ./elastic_stack/kibana -n elastic-stack 
+
+      - name: netpoli
+        id: netpoli
+        run: kubectl apply -f ./k8s/network-policies/fluentd-netpol.yaml 
+
+      - name: fluentd-aggregator
+        id: fluentd
+        run:  helm upgrade --install fluentd ./elastic_stack/fluentd -n elastic-stack -f ./elastic_stack/fluentd/fluentvalues.yaml 
+
+      - name: fluent-bit-forwarder
+        id: fluent-bit
+        run:  helm upgrade --install fluent-bit ./elastic_stack/fluent-bit -n elastic-stack -f ./elastic_stack/fluent-bit/bitvalues.yaml 
+
+      - name: Add Comment
+        if: always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.inputs.pr_number }}
+          body: |
+            #### StorageClass   - ${{ steps.storage.outcome}}
+            #### elasticsearch  - ${{ steps.elasticsearch.outcome }}
+            #### Kibana         - ${{ steps.kibana.outcome}}
+            #### Network Policy - ${{ steps.netpoli.outcome }}
+            #### Fluentd        - ${{ steps.fluentd.outcome }}
+            #### Fluent-bit     - ${{ steps.fluent-bit.outcome }}
+
+              *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+
+          edit-mode: replace
+          comment-tag: terraform-plan-comment
+
           
